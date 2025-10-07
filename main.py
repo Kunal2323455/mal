@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import (Conv2D, MaxPooling2D, Dropout, Flatten, 
-                                   Dense, BatchNormalization, GlobalAveragePooling2D)
+                                  Dense, BatchNormalization, GlobalAveragePooling2D)
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, img_to_array, load_img
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
@@ -103,7 +103,7 @@ for cls, count in counts_before.items():
 plt.figure(figsize=(10, 6))
 colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
 bars = plt.bar(counts_before.keys(), counts_before.values(), 
-               color=colors[:len(counts_before)])
+              color=colors[:len(counts_before)])
 plt.title('Tulsi Plant Disease Dataset - Class Distribution', fontsize=16, fontweight='bold')
 plt.ylabel('Number of Images', fontsize=12)
 plt.xlabel('Disease Classes', fontsize=12)
@@ -322,7 +322,7 @@ def create_custom_cnn():
 def create_vgg16_model():
     """Create VGG16 based transfer learning model"""
     base_model = VGG16(weights='imagenet', include_top=False, 
-                       input_shape=(IMG_HEIGHT, IMG_WIDTH, 3))
+                      input_shape=(IMG_HEIGHT, IMG_WIDTH, 3))
     
     # Freeze base model layers
     base_model.trainable = False
@@ -344,7 +344,7 @@ def create_vgg16_model():
 def create_mobilenet_model():
     """Create MobileNetV2 based transfer learning model"""
     base_model = MobileNetV2(weights='imagenet', include_top=False,
-                           input_shape=(IMG_HEIGHT, IMG_WIDTH, 3))
+                          input_shape=(IMG_HEIGHT, IMG_WIDTH, 3))
     
     # Freeze base model layers
     base_model.trainable = False
@@ -480,27 +480,39 @@ def plot_training_history(histories, metrics=['accuracy', 'loss']):
 plot_training_history(training_histories)
 
 # ====================================================================
-# STEP 11 — Model Evaluation and Comparison
+# STEP 11 — Model Evaluation and Comparison (FIXED VERSION)
 # ====================================================================
 
 def evaluate_model(model, model_name, test_generator):
-    """Evaluate model and return metrics"""
+    """Evaluate model and return metrics - CORRECTED VERSION"""
     print(f"\n📊 Evaluating {model_name}...")
     
-    # Reset test generator
+    # Reset test generator to start from beginning
     test_generator.reset()
     
-    # Get predictions
-    predictions = model.predict(test_generator, verbose=1)
+    # Get predictions with proper step count to ensure all samples are predicted
+    steps = len(test_generator)
+    predictions = model.predict(test_generator, steps=steps, verbose=1)
     predicted_classes = np.argmax(predictions, axis=1)
     
-    # Get true labels
-    true_classes = test_generator.classes
+    # Get true labels from the generator
+    true_classes = test_generator.classes[:len(predicted_classes)]
+    
+    # Validation check - ensure predictions and labels are aligned
+    if len(predicted_classes) != len(true_classes):
+        print(f"⚠️ Warning: Mismatch in prediction count!")
+        print(f"   Predictions: {len(predicted_classes)}, True labels: {len(true_classes)}")
+        # Trim to minimum length to avoid errors
+        min_len = min(len(predicted_classes), len(true_classes))
+        predicted_classes = predicted_classes[:min_len]
+        true_classes = true_classes[:min_len]
+        predictions = predictions[:min_len]
     
     # Calculate metrics
     accuracy = accuracy_score(true_classes, predicted_classes)
     
-    print(f"✅ {model_name} Test Accuracy: {accuracy:.4f}")
+    print(f"✅ {model_name} Test Accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
+    print(f"   Evaluated on {len(true_classes)} test samples")
     
     # Classification report
     report = classification_report(true_classes, predicted_classes, 
@@ -664,6 +676,7 @@ best_model.save('tulsi_disease_detection_best_model.h5')
 print(f"💾 Best model saved as 'tulsi_disease_detection_best_model.h5'")
 
 # Save model configuration
+import json
 model_config = {
     'best_model': best_model_name,
     'class_names': class_names,
@@ -673,7 +686,6 @@ model_config = {
     'training_date': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
 }
 
-import json
 with open('model_config.json', 'w') as f:
     json.dump(model_config, f, indent=2)
 
