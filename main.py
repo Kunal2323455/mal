@@ -33,6 +33,10 @@ import tensorflow.keras.backend as K
 print("✅ All libraries imported successfully!")
 print(f"TensorFlow Version: {tf.__version__}")
 
+# Set random seeds for reproducibility
+np.random.seed(42)
+tf.random.set_seed(42)
+
 # ====================================================================
 # STEP 1 — Dataset Setup and Extraction
 # ====================================================================
@@ -124,6 +128,9 @@ plt.show()
 def create_stratified_split(dataset_root, classes, train_ratio=0.7, val_ratio=0.15, test_ratio=0.15):
     """Create stratified train/validation/test split"""
     
+    # Set random seed for reproducibility
+    np.random.seed(42)
+    
     train_dir = "data_split/train"
     val_dir = "data_split/validation"
     test_dir = "data_split/test"
@@ -140,7 +147,8 @@ def create_stratified_split(dataset_root, classes, train_ratio=0.7, val_ratio=0.
         valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
         images = [f for f in os.listdir(cls_path) if f.lower().endswith(valid_extensions)]
         
-        # Shuffle images
+        # Sort images first for reproducibility, then shuffle with fixed seed
+        images.sort()
         np.random.shuffle(images)
         
         # Calculate split points
@@ -187,9 +195,9 @@ else:
 # STEP 4 — Advanced Data Augmentation and Generators
 # ====================================================================
 
-# Image parameters
+# Image parameters - smaller batch size for better generalization
 IMG_HEIGHT, IMG_WIDTH = 224, 224
-BATCH_SIZE = 32
+BATCH_SIZE = 16  # Reduced batch size for better generalization
 NUM_CLASSES = len(classes)
 
 # Create class name to index mapping
@@ -197,18 +205,18 @@ class_names = sorted(classes)
 class_indices = {name: idx for idx, name in enumerate(class_names)}
 print(f"🏷️ Class Mapping: {class_indices}")
 
-# Advanced data augmentation for training
+# More aggressive data augmentation for training to prevent overfitting
 train_datagen = ImageDataGenerator(
     rescale=1./255,
-    rotation_range=30,
-    width_shift_range=0.2,
-    height_shift_range=0.2,
-    shear_range=0.2,
-    zoom_range=0.2,
+    rotation_range=40,  # Increased rotation
+    width_shift_range=0.3,  # Increased shift
+    height_shift_range=0.3,  # Increased shift
+    shear_range=0.3,  # Increased shear
+    zoom_range=0.3,  # Increased zoom
     horizontal_flip=True,
     vertical_flip=True,
-    brightness_range=[0.8, 1.2],
-    channel_shift_range=0.1,
+    brightness_range=[0.7, 1.3],  # More brightness variation
+    channel_shift_range=0.2,  # Increased channel shift
     fill_mode='nearest'
 )
 
@@ -221,7 +229,8 @@ train_generator = train_datagen.flow_from_directory(
     target_size=(IMG_HEIGHT, IMG_WIDTH),
     batch_size=BATCH_SIZE,
     class_mode='categorical',
-    shuffle=True
+    shuffle=True,
+    seed=42  # Fixed seed for reproducibility
 )
 
 validation_generator = val_test_datagen.flow_from_directory(
@@ -229,7 +238,8 @@ validation_generator = val_test_datagen.flow_from_directory(
     target_size=(IMG_HEIGHT, IMG_WIDTH),
     batch_size=BATCH_SIZE,
     class_mode='categorical',
-    shuffle=False
+    shuffle=False,  # Never shuffle validation
+    seed=42
 )
 
 test_generator = val_test_datagen.flow_from_directory(
@@ -237,7 +247,8 @@ test_generator = val_test_datagen.flow_from_directory(
     target_size=(IMG_HEIGHT, IMG_WIDTH),
     batch_size=BATCH_SIZE,
     class_mode='categorical',
-    shuffle=False
+    shuffle=False,  # Never shuffle test data
+    seed=42
 )
 
 print(f"🔄 Training samples: {train_generator.samples}")
@@ -276,38 +287,38 @@ show_augmented_images(train_generator)
 # ====================================================================
 
 def create_custom_cnn():
-    """Create custom CNN for tulsi disease detection"""
+    """Create custom CNN for tulsi disease detection with better regularization"""
     model = Sequential([
         # First Convolutional Block
         Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)),
         BatchNormalization(),
         MaxPooling2D(2, 2),
-        Dropout(0.25),
+        Dropout(0.3),  # Increased dropout
         
         # Second Convolutional Block
         Conv2D(64, (3, 3), activation='relu'),
         BatchNormalization(),
         MaxPooling2D(2, 2),
-        Dropout(0.25),
+        Dropout(0.35),  # Increased dropout
         
         # Third Convolutional Block
         Conv2D(128, (3, 3), activation='relu'),
         BatchNormalization(),
         MaxPooling2D(2, 2),
-        Dropout(0.25),
+        Dropout(0.4),  # Increased dropout
         
         # Fourth Convolutional Block
         Conv2D(256, (3, 3), activation='relu'),
         BatchNormalization(),
         MaxPooling2D(2, 2),
-        Dropout(0.25),
+        Dropout(0.45),  # Increased dropout
         
-        # Dense Layers
+        # Dense Layers with more aggressive regularization
         Flatten(),
-        Dense(512, activation='relu'),
+        Dense(256, activation='relu'),  # Reduced neurons
         BatchNormalization(),
-        Dropout(0.5),
-        Dense(256, activation='relu'),
+        Dropout(0.6),  # Increased dropout
+        Dense(128, activation='relu'),  # Reduced neurons
         BatchNormalization(),
         Dropout(0.5),
         Dense(NUM_CLASSES, activation='softmax')
@@ -330,12 +341,13 @@ def create_vgg16_model():
     model = Sequential([
         base_model,
         GlobalAveragePooling2D(),
+        Dropout(0.6),  # Add dropout before first dense layer
         Dense(256, activation='relu'),
         BatchNormalization(),
-        Dropout(0.5),
-        Dense(128, activation='relu'),
+        Dropout(0.7),  # Increased dropout
+        Dense(64, activation='relu'),  # Reduced neurons
         BatchNormalization(),
-        Dropout(0.3),
+        Dropout(0.5),
         Dense(NUM_CLASSES, activation='softmax')
     ])
     
@@ -352,12 +364,13 @@ def create_mobilenet_model():
     model = Sequential([
         base_model,
         GlobalAveragePooling2D(),
-        Dense(256, activation='relu'),
+        Dropout(0.6),  # Add dropout before first dense layer
+        Dense(128, activation='relu'),  # Reduced neurons
+        BatchNormalization(),
+        Dropout(0.7),  # Increased dropout
+        Dense(64, activation='relu'),  # Reduced neurons
         BatchNormalization(),
         Dropout(0.5),
-        Dense(128, activation='relu'),
-        BatchNormalization(),
-        Dropout(0.3),
         Dense(NUM_CLASSES, activation='softmax')
     ])
     
@@ -370,31 +383,38 @@ def create_mobilenet_model():
 def compile_and_train_model(model, model_name, epochs=50):
     """Compile and train the model with callbacks"""
     
+    # Use different learning rates for different models
+    if 'Transfer' in model_name:
+        learning_rate = 0.0001  # Lower learning rate for transfer learning
+    else:
+        learning_rate = 0.001
+    
     # Compile model
     model.compile(
-        optimizer=Adam(learning_rate=0.001),
+        optimizer=Adam(learning_rate=learning_rate),
         loss='categorical_crossentropy',
         metrics=['accuracy', 'precision', 'recall']
     )
     
-    # Callbacks
+    # Callbacks with more aggressive early stopping
     callbacks = [
         EarlyStopping(
-            monitor='val_accuracy',
-            patience=10,
+            monitor='val_loss',  # Monitor val_loss instead of val_accuracy
+            patience=7,  # Reduced patience
             restore_best_weights=True,
-            verbose=1
+            verbose=1,
+            min_delta=0.001  # Minimum change to qualify as improvement
         ),
         ReduceLROnPlateau(
             monitor='val_loss',
-            factor=0.2,
-            patience=5,
-            min_lr=0.0001,
+            factor=0.3,  # More aggressive reduction
+            patience=3,  # Reduced patience
+            min_lr=0.00001,
             verbose=1
         ),
         ModelCheckpoint(
             f'best_{model_name}_model.h5',
-            monitor='val_accuracy',
+            monitor='val_loss',  # Monitor val_loss for better generalization
             save_best_only=True,
             verbose=1
         )
@@ -404,12 +424,20 @@ def compile_and_train_model(model, model_name, epochs=50):
     print(f"\n🏗️ {model_name} Architecture:")
     model.summary()
     
+    # Calculate steps per epoch
+    steps_per_epoch = max(1, train_generator.samples // train_generator.batch_size)
+    validation_steps = max(1, validation_generator.samples // validation_generator.batch_size)
+    
     # Train model
     print(f"\n🚀 Training {model_name}...")
+    print(f"Steps per epoch: {steps_per_epoch}, Validation steps: {validation_steps}")
+    
     history = model.fit(
         train_generator,
         epochs=epochs,
+        steps_per_epoch=steps_per_epoch,
         validation_data=validation_generator,
+        validation_steps=validation_steps,
         callbacks=callbacks,
         verbose=1
     )
@@ -435,7 +463,9 @@ for model_name, model in models_to_train.items():
     print(f"TRAINING: {model_name}")
     print(f"{'='*60}")
     
-    trained_model, history = compile_and_train_model(model, model_name, epochs=30)
+    # Use fewer epochs for transfer learning models to prevent overfitting
+    epochs = 15 if 'Transfer' in model_name else 25
+    trained_model, history = compile_and_train_model(model, model_name, epochs=epochs)
     trained_models[model_name] = trained_model
     training_histories[model_name] = history
 
@@ -487,15 +517,18 @@ def evaluate_model(model, model_name, test_generator):
     """Evaluate model and return metrics"""
     print(f"\n📊 Evaluating {model_name}...")
     
-    # Reset test generator
+    # Reset test generator to ensure proper evaluation
     test_generator.reset()
     
+    # Calculate steps needed for full evaluation
+    steps = np.ceil(test_generator.samples / test_generator.batch_size)
+    
     # Get predictions
-    predictions = model.predict(test_generator, verbose=1)
+    predictions = model.predict(test_generator, steps=steps, verbose=1)
     predicted_classes = np.argmax(predictions, axis=1)
     
-    # Get true labels
-    true_classes = test_generator.classes
+    # Get true labels - ensure we have the right number
+    true_classes = test_generator.classes[:len(predicted_classes)]
     
     # Calculate metrics
     accuracy = accuracy_score(true_classes, predicted_classes)
